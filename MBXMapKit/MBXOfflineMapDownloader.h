@@ -168,6 +168,14 @@ typedef NS_ENUM(NSUInteger, MBXOfflineMapDownloaderState) {
 *   @param imageQuality The image quality to when requesting tiles. */
 - (void)beginDownloadingMapID:(NSString *)mapID mapRegion:(MKCoordinateRegion)mapRegion minimumZ:(NSInteger)minimumZ maximumZ:(NSInteger)maximumZ includeMetadata:(BOOL)includeMetadata includeMarkers:(BOOL)includeMarkers imageQuality:(MBXRasterImageQuality)imageQuality;
 
+/** Begins an offline map download job for an arbitrary tile overlay.
+ *   @param mapTileOverlay Tile overlay to retrieve the download URL from.
+ *   @param mapID Arbitrary map ID to identify the map. Avoid clashes with MapBox IDs!
+ *   @param mapRegion The region of the map for which to download tiles.
+ *   @param minimumZ The minimum zoom level for which to download tiles.
+ *   @param maximumZ The maximum zoom level for which to download tiles. */
+- (void)beginDownloadingMapWithTileOverlay:(MKTileOverlay *)mapTileOverlay mapID:(NSString *)mapID mapRegion:(MKCoordinateRegion)mapRegion minimumZ:(NSInteger)minimumZ maximumZ:(NSInteger)maximumZ;
+
 /** Cancels the current offline map download job and discards any associated resources. */
 - (void)cancel;
 
