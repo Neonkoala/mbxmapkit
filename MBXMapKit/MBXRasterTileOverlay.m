@@ -59,6 +59,7 @@
 @property (nonatomic) BOOL didFinishLoadingMarkers;
 
 @property (strong, nonatomic) MBXOfflineMapDatabase *offlineMapDatabase;
+@property (strong, nonatomic) NSString *cachesDirectory;
 
 @property (nonatomic) NSDictionary *metadataForPendingNotification;
 @property (nonatomic) NSError *metadataErrorForPendingNotification;
@@ -155,7 +156,7 @@
     self = [super init];
     if (self)
     {
-        [self setupMapID:mapID includeMetadata:YES includeMarkers:YES imageQuality:MBXRasterImageQualityFull];
+        [self setupMapID:mapID includeMetadata:YES includeMarkers:YES imageQuality:MBXRasterImageQualityFull cacheDirectory:nil];
     }
     return self;
 }
@@ -166,7 +167,7 @@
     self = [super init];
     if (self)
     {
-        [self setupMapID:mapID includeMetadata:includeMetadata includeMarkers:includeMarkers imageQuality:MBXRasterImageQualityFull];
+        [self setupMapID:mapID includeMetadata:includeMetadata includeMarkers:includeMarkers imageQuality:MBXRasterImageQualityFull cacheDirectory:nil];
     }
     return self;
 }
@@ -177,7 +178,17 @@
     self = [super init];
     if (self)
     {
-        [self setupMapID:mapID includeMetadata:includeMetadata includeMarkers:includeMarkers imageQuality:imageQuality];
+        [self setupMapID:mapID includeMetadata:includeMetadata includeMarkers:includeMarkers imageQuality:imageQuality cacheDirectory:nil];
+    }
+    return self;
+}
+
+- (id)initWithMapID:(NSString *)mapID includeMetadata:(BOOL)includeMetadata includeMarkers:(BOOL)includeMarkers imageQuality:(MBXRasterImageQuality)imageQuality cacheDirectory:(NSString *)cacheDir
+{
+    self = [super init];
+    if (self)
+    {
+        [self setupMapID:mapID includeMetadata:includeMetadata includeMarkers:includeMarkers imageQuality:imageQuality cacheDirectory:cacheDir];
     }
     return self;
 }
@@ -189,12 +200,12 @@
     if (self)
     {
         _offlineMapDatabase = offlineMapDatabase;
-        [self setupMapID:offlineMapDatabase.mapID includeMetadata:offlineMapDatabase.includesMetadata includeMarkers:offlineMapDatabase.includesMarkers imageQuality:offlineMapDatabase.imageQuality];
+        [self setupMapID:offlineMapDatabase.mapID includeMetadata:offlineMapDatabase.includesMetadata includeMarkers:offlineMapDatabase.includesMarkers imageQuality:offlineMapDatabase.imageQuality cacheDirectory:nil];
     }
     return self;
 }
 
-- (void)setupMapID:(NSString *)mapID includeMetadata:(BOOL)includeMetadata includeMarkers:(BOOL)includeMarkers imageQuality:(MBXRasterImageQuality)imageQuality
+- (void)setupMapID:(NSString *)mapID includeMetadata:(BOOL)includeMetadata includeMarkers:(BOOL)includeMarkers imageQuality:(MBXRasterImageQuality)imageQuality cacheDirectory:(NSString *)cacheDir
 {
     // Configure the NSURLSessions
     //
@@ -205,7 +216,15 @@
     config.HTTPAdditionalHeaders = @{ @"User-Agent" : [MBXMapKit userAgent] };
     _dataSession = [NSURLSession sessionWithConfiguration:config];
 
-
+    if(cacheDir) {
+        NSArray *cachePathArray = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+        _cachesDirectory = [[[cachePathArray lastObject] stringByAppendingPathComponent:cacheDir] stringByAppendingPathComponent:mapID];
+        
+        if(![[NSFileManager defaultManager] fileExistsAtPath:_cachesDirectory]) {
+            [[NSFileManager defaultManager] createDirectoryAtPath:_cachesDirectory withIntermediateDirectories:YES attributes:nil error:nil];
+        }
+    }
+    
     // Save the map configuration
     //
     _mapID = mapID;
@@ -272,6 +291,13 @@
         return;
     }
 
+    __block NSString *cacheTilePath = nil;
+    if(self.cachesDirectory) {
+        // Caching to disk enabled
+        NSString *formattedPath = [NSString stringWithFormat:@"%ld_%ld_%ld.png", (long)path.z, (long)path.x, (long)path.y];
+        cacheTilePath = [self.cachesDirectory stringByAppendingPathComponent:formattedPath];
+    }
+    
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://a.tiles.mapbox.com/v3/%@/%ld/%ld/%ld%@.%@",
                                        _mapID,
                                        (long)path.z,
@@ -280,11 +306,25 @@
                                        (path.contentScaleFactor > 1.0 ? @"@2x" : @""),
                                        [MBXRasterTileOverlay qualityExtensionForImageQuality:_imageQuality]
                                        ]];
+    
+    if(cacheTilePath) {
+        if([[NSFileManager defaultManager] fileExistsAtPath:cacheTilePath]) {
+            NSData *tile = [NSData dataWithContentsOfFile:cacheTilePath];
+            if(tile) {
+                result(tile, nil);
+                return;
+            }
+        }
+    }
 
     void(^completionHandler)(NSData *,NSError *) = ^(NSData *data, NSError *error)
     {
         // Invoke the loadTileAtPath's completion handler
         //
+        if(cacheTilePath) {
+            [data writeToFile:cacheTilePath atomically:YES];
+        }
+        
         if ([NSThread isMainThread])
         {
             result(data, error);

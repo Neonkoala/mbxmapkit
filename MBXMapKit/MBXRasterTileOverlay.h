@@ -93,6 +93,16 @@ extern NSInteger const MBXMapKitErrorCodeDictionaryMissingKeys;
 */
 - (id)initWithMapID:(NSString *)mapID includeMetadata:(BOOL)includeMetadata includeMarkers:(BOOL)includeMarkers imageQuality:(MBXRasterImageQuality)imageQuality;
 
+/** Initialize a map view with a given Mapbox map ID while specifying whether to load metadata, whether to load markers, which image quality to request, and which user agent string to use.
+ *   @param mapID The Mapbox map ID.
+ *   @param includeMetadata Whether to load the map's metadata including center coordinate and zoom limits
+ *   @param includeMarkers Whether to load the map's markers
+ *   @param imageQuality The image quality to use for requesting tiles
+ *   @param cacheDir The directory to save cached tiles to
+ *   @return An initialized raster tile overlay, or `nil` if an overlay could not be initialized.
+ */
+- (id)initWithMapID:(NSString *)mapID includeMetadata:(BOOL)includeMetadata includeMarkers:(BOOL)includeMarkers imageQuality:(MBXRasterImageQuality)imageQuality cacheDirectory:(NSString *)cacheDir;
+
 /** Initialize from an `MBXOfflineMapDatabase` object, using its stored values for metadata and markers, if it has any
 *   @param offlineMapDatabase An offline map database object obtained from `MBXOfflineMapDownloader`
 *   @return An initialized raster tile overlay, or `nil` if an overlay could not be initialized.
