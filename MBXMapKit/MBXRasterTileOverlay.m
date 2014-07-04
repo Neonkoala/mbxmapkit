@@ -58,6 +58,7 @@
 @property (nonatomic) BOOL didFinishLoadingMetadata;
 @property (nonatomic) BOOL didFinishLoadingMarkers;
 
+@property (strong, atomic) NSMutableSet *fetchingTilePaths;
 @property (strong, nonatomic) MBXOfflineMapDatabase *offlineMapDatabase;
 @property (strong, nonatomic) NSString *cachesDirectory;
 
@@ -207,6 +208,9 @@
 
 - (void)setupMapID:(NSString *)mapID includeMetadata:(BOOL)includeMetadata includeMarkers:(BOOL)includeMarkers imageQuality:(MBXRasterImageQuality)imageQuality cacheDirectory:(NSString *)cacheDir
 {
+    
+    _fetchingTilePaths = [NSMutableSet setWithCapacity:4];
+    
     // Configure the NSURLSessions
     //
     NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -290,13 +294,6 @@
         //
         return;
     }
-
-    __block NSString *cacheTilePath = nil;
-    if(self.cachesDirectory) {
-        // Caching to disk enabled
-        NSString *formattedPath = [NSString stringWithFormat:@"%ld_%ld_%ld.png", (long)path.z, (long)path.x, (long)path.y];
-        cacheTilePath = [self.cachesDirectory stringByAppendingPathComponent:formattedPath];
-    }
     
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://a.tiles.mapbox.com/v3/%@/%ld/%ld/%ld%@.%@",
                                        _mapID,
@@ -306,6 +303,22 @@
                                        (path.contentScaleFactor > 1.0 ? @"@2x" : @""),
                                        [MBXRasterTileOverlay qualityExtensionForImageQuality:_imageQuality]
                                        ]];
+    
+    __weak MBXRasterTileOverlay *weakSelf = self;
+    __block NSString *cacheTilePath = nil;
+    __block NSString *tileName = [NSString stringWithFormat:@"%ld_%ld_%ld", (long)path.z, (long)path.x, (long)path.y];
+    if(self.cachesDirectory) {
+        // Caching to disk enabled
+        cacheTilePath = [self.cachesDirectory stringByAppendingPathComponent:tileName];
+    }
+    
+    // Log it to our list of outstanding tiles
+    @synchronized(self) {
+        [self.fetchingTilePaths addObject:tileName];
+    }
+    if(self.fetchingTilePaths.count == 1) {
+        [self.delegate tileOverlayWillBeginLoadingRasterTiles:self];
+    }
     
     if(cacheTilePath) {
         if([[NSFileManager defaultManager] fileExistsAtPath:cacheTilePath]) {
@@ -334,6 +347,21 @@
             dispatch_async(dispatch_get_main_queue(), ^(void){
                 result(data, error);
             });
+        }
+        
+        @synchronized(self) {
+            NSString *keyToRemove;
+            for(NSString *quadKey in self.fetchingTilePaths) {
+                if([quadKey isEqualToString:tileName]) {
+                    keyToRemove = quadKey;
+                    break;
+                }
+            }
+            [weakSelf.fetchingTilePaths removeObject:keyToRemove];
+        }
+        
+        if(self.fetchingTilePaths.count == 0) {
+            [weakSelf.delegate tileOverlayDidFinishLoadingRasterTiles:self];
         }
     };
 

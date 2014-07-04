@@ -44,6 +44,9 @@ extern NSInteger const MBXMapKitErrorCodeDictionaryMissingKeys;
 *   @param overlay The raster tile overlay which is finished loading metadata and markers. */
 - (void)tileOverlayDidFinishLoadingMetadataAndMarkers:(MBXRasterTileOverlay *)overlay;
 
+- (void)tileOverlayWillBeginLoadingRasterTiles:(MBXRasterTileOverlay *)overlay;
+- (void)tileOverlayDidFinishLoadingRasterTiles:(MBXRasterTileOverlay *)overlay;
+
 @end
 
 
